@@ -3,6 +3,12 @@ class TetrisGame extends TetrisSimulation {
         super(args);
     }
 
+    createBoard() {
+        // Background board
+        ctx.fillStyle = "rgb(10,10,10)";
+        ctx.fillRect(config.minoSize * 5, config.minoSize * 20, config.minoSize * 10, config.minoSize * 20);
+    }
+
     updateQueue() {
         let nextPiece = super.updateQueue();
         this.drawQueue();
@@ -27,6 +33,7 @@ class TetrisGame extends TetrisSimulation {
     setCurrentPiece(piece) {
         super.setCurrentPiece(piece);
         this.drawHold();
+        this.drawCurrentPiece();
     }
 
     drawQueue() {
@@ -161,16 +168,4 @@ class TetrisGame extends TetrisSimulation {
     hold() {
         (super.hold.bind(this))();
     }
-
-    /*
-    clearEverything() {
-        clearBoard();
-        boardMinos = [];
-        randomSeed = Math.random() * 8198389;
-        queue = permute7[Math.floor(prng(randomSeed)*5040)];
-        piecesSpawned = 0;
-        setCurrentPiece();
-        drawCurrentPiece();
-    }
-    */
 }
