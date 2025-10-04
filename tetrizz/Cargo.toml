@@ -1,0 +1,15 @@
+[package]
+name = "tetrizz"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+arrayvec = "0.7.6"
+bitboard_derive = { path = "../bitboard/bitboard_derive" }
+bitboard_traits = { path = "../bitboard/bitboard_traits" }
+criterion = "0.7.0"
+rand = "0.9.2"
+
+[[bench]]
+name = "map"
+harness = false
