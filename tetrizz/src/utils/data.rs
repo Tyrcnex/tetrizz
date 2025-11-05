@@ -1,35 +1,38 @@
 use bitboard_traits::BitboardTrait;
 use bitboard_derive::Bitboard;
+use rand::Rng;
+use serde::Deserialize;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Deserialize)]
 pub enum Piece {
     I, O, T, L, J, S, Z
 }
 
 #[repr(u8)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Deserialize)]
 pub enum Rotation {
     North, East, South, West
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub const ROT: [Rotation; 4] = [Rotation::North, Rotation::East, Rotation::South, Rotation::West];
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Deserialize)]
 pub enum Spin {
     None, Full, Mini
 }
 
-#[derive(Bitboard, Debug, Clone)]
+#[derive(Bitboard, Debug, Clone, Deserialize)]
 pub struct Board {
     pub cols: [u64; 10]
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct PieceLocation {
     pub piece: Piece,
     pub x: i8,
     pub y: i8,
     pub rotation: Rotation,
     pub spin: Spin
-    // pub possible_line_clear: bool
 }
 
 impl Rotation {
@@ -51,7 +54,7 @@ impl Rotation {
         ]
     }
 
-    pub const fn rotate_right(&self) -> Rotation {
+    pub const fn rotate_cw(&self) -> Rotation {
         match self {
             Rotation::North => Rotation::East,
             Rotation::East => Rotation::South,
@@ -60,7 +63,7 @@ impl Rotation {
         }
     }
 
-    pub const fn rotate_left(&self) -> Rotation {
+    pub const fn rotate_ccw(&self) -> Rotation {
         match self {
             Rotation::North => Rotation::West,
             Rotation::West => Rotation::South,
@@ -149,6 +152,14 @@ impl PieceLocation {
 }
 
 impl Board {
+    #[inline(always)]
+    pub fn add_garbage(&mut self, lines: u16) {
+        let mut rng = rand::rng();
+        let garb_col = rng.random_range(0..10);
+        for x in 0..10 {
+            self.cols[x] = if x == garb_col { self.cols[x] << lines } else { !(!self.cols[x] << lines) };
+        }
+    }
     #[inline(always)]
     pub fn put_piece(&mut self, loc: &PieceLocation) {
         for &(x, y) in &loc.blocks() {

@@ -1,12 +1,10 @@
 use bitboard_derive::Bitboard;
 use bitboard_traits::BitboardTrait;
-use arrayvec::ArrayVec;
 
-use crate::utils::data::{Piece, Rotation, Spin, Board, PieceLocation, LUT};
+use crate::utils::data::{Piece, Rotation, Spin, Board, PieceLocation, LUT, ROT};
 
-const SPAWN_ROW: i8 = 21;
-const SPAWN_COL: usize = 4;
-const ROT: [Rotation; 4] = [Rotation::North, Rotation::East, Rotation::South, Rotation::West];
+pub const SPAWN_ROW: i8 = 21;
+pub const SPAWN_COL: usize = 4;
 
 #[derive(Bitboard, Clone, Debug)]
 pub struct CollisionMap {
@@ -30,36 +28,42 @@ impl CollisionMap {
         Self { cols: obstructed }
     }
 
+    pub fn obstructed(&self, x: i8, y: i8) -> bool {
+        if x < 0 || x > 9 || y < 0 { return true; }
+        self[x as usize] & (1 << y) > 0
+    }
+
     pub fn as_board(&self) -> Board {
         Board { cols: self.cols }
     }
 }
 
-macro_rules! bb { ($x:expr) => { 1u64 << $x }; }
-macro_rules! bb_low { ($x:expr) => { (1u64 << $x) - 1 }; }
+pub const fn bb(x: i8) -> u64 { 1u64 << x }
+pub const fn bb_low(x: i8) -> u64 { (1u64 << x) - 1 }
 
 // see below explanation of the remaining variable
-macro_rules! xrot_idx { ($x: expr, $rot: expr) => { bb!(4 * $x + $rot as usize) } }
+pub const fn xrot_idx(x: i8, rot: i8) -> u64 { bb(4 * x + rot) }
 
-pub fn movegen<'a>(board: &'a Board, piece1: Piece, piece2: Piece, force: bool) -> impl Iterator<Item = PieceLocation> {
-    let moves1 = movegen_piece(board, piece1, force);
-    let moves2 = if piece1 == piece2 {
-        ArrayVec::new()
-    } else {
-        movegen_piece(board, piece2, force)
-    };
-    moves1.into_iter().chain(moves2.into_iter())
-}
-
-pub fn movegen_piece(board: &Board, piece: Piece, force: bool) -> ArrayVec<PieceLocation, 128> {
-    match piece {
-        Piece::J | Piece::L | Piece::S | Piece::Z | Piece::I => movegen_piece_nospin(board, ROT.map(|r| CollisionMap::new(board, piece, r)), piece, force),
-        Piece::T => movegen_piece_t(board, ROT.map(|r| CollisionMap::new(board, piece, r)), force),
-        Piece::O => movegen_piece_o(board, force)
+pub fn movegen(arena: &mut Vec<PieceLocation>, board: &Board, main_piece: Piece, hold_piece: Option<Piece>, force: bool) -> usize {
+    let idx = arena.len();
+    movegen_piece(arena, board, main_piece, force);
+    if let Some(h) = hold_piece {
+        movegen_piece(arena, board, h, force);
     }
+    idx
 }
 
-fn movegen_piece_nospin(board: &Board, cm: [CollisionMap; 4], piece: Piece, force: bool) -> ArrayVec<PieceLocation, 128> {
+pub fn movegen_piece(arena: &mut Vec<PieceLocation>, board: &Board, piece: Piece, force: bool) -> usize {
+    let idx = arena.len();
+    match piece {
+        Piece::J | Piece::L | Piece::S | Piece::Z | Piece::I => movegen_piece_nospin(arena, board, ROT.map(|r| CollisionMap::new(board, piece, r)), piece, force),
+        Piece::T => movegen_piece_t(arena, board, ROT.map(|r| CollisionMap::new(board, piece, r)), force),
+        Piece::O => movegen_piece_o(arena, board, force)
+    }
+    idx
+}
+
+fn movegen_piece_nospin(arena: &mut Vec<PieceLocation>, board: &Board, cm: [CollisionMap; 4], piece: Piece, force: bool) {
     // let cm = ROT.map(|r| CollisionMap::new(board, piece, r));
     let mut searched = cm.clone().map(|x| x.as_board());
     let mut to_search: [Board; 4] = std::array::from_fn(|_| Board::new());
@@ -71,11 +75,11 @@ fn movegen_piece_nospin(board: &Board, cm: [CollisionMap; 4], piece: Piece, forc
     let mut fullspinmap: [Board; 4] = std::array::from_fn(|_| Board::new());
     for rot in ROT {
         for x in 0..10 {
-            fullspinmap[rot as usize][x] = cm[rot as usize][x] & (
-                !cm[rot as usize].cols.get(x - 1).copied().unwrap_or(!0)
-                & !cm[rot as usize].cols.get(x + 1).copied().unwrap_or(!0)
-                & (!cm[rot as usize][x] << 1 | 1)
-                & !cm[rot as usize][x] >> 1
+            fullspinmap[rot as usize][x] = !cm[rot as usize][x] & (
+                cm[rot as usize].cols.get(x - 1).copied().unwrap_or(!0)
+                & cm[rot as usize].cols.get(x + 1).copied().unwrap_or(!0)
+                & (cm[rot as usize][x] << 1 | 1)
+                & cm[rot as usize][x] >> 1
             );
         }
     }
@@ -95,19 +99,17 @@ fn movegen_piece_nospin(board: &Board, cm: [CollisionMap; 4], piece: Piece, forc
     // thats why this isnt applicable to the t piece, which has non immobile spins
     let mut max_moves = 0;
 
-    let mut moves: ArrayVec<PieceLocation, 128> = ArrayVec::new();
-
     if board.max_height() > SPAWN_ROW - 3 {
         let spawn = if force {
             let s = !cm[Rotation::North as usize][SPAWN_COL] & (!0 << SPAWN_ROW);
             s & s.wrapping_neg() // gets lowest bit. cursed overflow technique imo
-        } else { !cm[Rotation::North as usize][SPAWN_COL] & bb!(SPAWN_ROW) };
+        } else { !cm[Rotation::North as usize][SPAWN_COL] & bb(SPAWN_ROW) };
         
-        if spawn != 0 {
-            return moves;
+        if spawn == 0 {
+            return;
         }
 
-        let spawn_bit = xrot_idx!(SPAWN_COL, Rotation::North);
+        let spawn_bit = xrot_idx(SPAWN_COL as i8, Rotation::North as i8);
         remaining |= spawn_bit;
         to_search[Rotation::North as usize][SPAWN_COL] |= spawn;
     } else {
@@ -118,25 +120,25 @@ fn movegen_piece_nospin(board: &Board, cm: [CollisionMap; 4], piece: Piece, forc
                     continue;
                 }
                 let y = 64 - col.leading_zeros();
-                let surface = bb_low!(SPAWN_ROW) & !bb_low!(y);
+                let surface = bb_low(SPAWN_ROW) & !bb_low(y as i8);
 
                 to_search[rot as usize][x] = surface;
                 searched[rot as usize][x] |= surface;
-                remaining |= xrot_idx!(x, rot as usize);
+                remaining |= xrot_idx(x as i8, rot as i8);
 
-                // moveset[rot as usize][x] |= bb!(y);
+                // moveset[rot as usize][x] |= bb(y as i8);
                 if match piece {
                     Piece::I | Piece::S | Piece::Z => rot == Rotation::North || rot == Rotation::East,
                     Piece::J | Piece::L | Piece::T => true,
                     _ => unreachable!()
                 } {
-                    moves.push(PieceLocation { piece, x: x as i8, y: y as i8, rotation: unsafe { std::mem::transmute(rot as u8) }, spin: Spin::None });
+                    arena.push(PieceLocation { piece, x: x as i8, y: y as i8, rotation: unsafe { std::mem::transmute(rot as u8) }, spin: Spin::None });
                     max_moves += (!col & ((col << 1) | 1)).count_ones() - 1;
                 }
             }
         }
         if max_moves == 0 {
-            return moves;
+            return;
         }
     }
 
@@ -145,12 +147,13 @@ fn movegen_piece_nospin(board: &Board, cm: [CollisionMap; 4], piece: Piece, forc
         let x = idx >> 2;
         let rot = idx & 3;
 
-        // non-inf sdf softdrops
-        let mut m = (to_search[rot][x] >> 1) & !to_search[rot][x] & !searched[rot][x];
-        while (m & to_search[rot][x]) != m {
-            to_search[rot][x] |= m;
-            m = (m >> 1) & !searched[rot][x];
+        let mut m = to_search[rot][x];
+        let mut s = 0;
+        while m != s {
+            s = m;
+            m |= (m >> 1) & !searched[rot][x];
         }
+        to_search[rot][x] = m & ((cm[rot][x] << 1) | 1);
 
         // harddrops
         let m = to_search[rot][x] & (cm[rot][x] << 1) & !searched[rot][x];
@@ -179,7 +182,7 @@ fn movegen_piece_nospin(board: &Board, cm: [CollisionMap; 4], piece: Piece, forc
                 moveset[canonical_rot][canonical_x] |= m;
                 max_moves -= m.count_ones();
                 while m != 0 {
-                    moves.push(PieceLocation { piece, x: canonical_x as i8, y: m.trailing_zeros() as i8, rotation: unsafe { std::mem::transmute(canonical_rot as u8) }, spin: if fullspinmap[canonical_rot][canonical_x] & (m & m.wrapping_neg()) == 0 { Spin::None } else { Spin::Full }});
+                    arena.push(PieceLocation { piece, x: canonical_x as i8, y: m.trailing_zeros() as i8, rotation: unsafe { std::mem::transmute(canonical_rot as u8) }, spin: if fullspinmap[canonical_rot][canonical_x] & (m & m.wrapping_neg()) == 0 { Spin::None } else { Spin::Full }});
                     m &= m - 1;
                 }
                 if max_moves == 0 {
@@ -193,19 +196,19 @@ fn movegen_piece_nospin(board: &Board, cm: [CollisionMap; 4], piece: Piece, forc
             let m = to_search[rot][x] & !searched[rot][x - 1];
             if m != 0 {
                 to_search[rot][x - 1] |= m;
-                remaining |= xrot_idx!(x - 1, rot);
+                remaining |= xrot_idx(x as i8 - 1, rot as i8);
             }
         }
         if x < 9 {
             let m = to_search[rot][x] & !searched[rot][x + 1];
             if m != 0 {
                 to_search[rot][x + 1] |= m;
-                remaining |= xrot_idx!(x + 1, rot);
+                remaining |= xrot_idx(x as i8 + 1, rot as i8);
             }
         }
 
-        let mut current = to_search[rot][x];
         for to in [(rot + 1) & 3, rot.wrapping_sub(1) & 3] {
+            let mut current = to_search[rot][x];
             let from: Rotation = unsafe { std::mem::transmute(rot as u8) };
             let to: Rotation = unsafe { std::mem::transmute(to as u8) };
             for (kx, ky) in kicks(piece, from, to) {
@@ -220,7 +223,7 @@ fn movegen_piece_nospin(board: &Board, cm: [CollisionMap; 4], piece: Piece, forc
                 m &= !searched[to as usize][nx as usize];
                 if m != 0 {
                     to_search[to as usize][nx as usize] |= m;
-                    remaining |= xrot_idx!(nx as usize, to);
+                    remaining |= xrot_idx(nx as i8, to as i8);
                 }
             }
         }
@@ -240,22 +243,20 @@ fn movegen_piece_nospin(board: &Board, cm: [CollisionMap; 4], piece: Piece, forc
             m &= !searched[to as usize][nx as usize];
             if m != 0 {
                 to_search[to as usize][nx as usize] |= m;
-                remaining |= xrot_idx!(nx as usize, to);
+                remaining |= xrot_idx(nx, to as i8);
             }
         }
 
         searched[rot][x] |= to_search[rot][x];
         to_search[rot][x] = 0;
-        remaining ^= bb!(idx);
+        remaining ^= bb(idx as i8);
     }
-
-    moves
 }
 
-fn movegen_piece_t(board: &Board, cm: [CollisionMap; 4], force: bool) -> ArrayVec<PieceLocation, 128> {
+fn movegen_piece_t(arena: &mut Vec<PieceLocation>, board: &Board, cm: [CollisionMap; 4], force: bool) {
     let mut fullspinmap: [Board; 4] = std::array::from_fn(|_| Board::new());
     let mut spinmap: [Board; 4] = std::array::from_fn(|_| Board::new());
-    let mut check_spin = false;
+    let mut immobile_spinmap = Board::new();
 
     for x in 0..10 {
         let c = [
@@ -269,25 +270,18 @@ fn movegen_piece_t(board: &Board, cm: [CollisionMap; 4], force: bool) -> ArrayVe
             c[0] & c[1] & (c[2] | c[3]) | 
             c[2] & c[3] & (c[0] | c[1]);
 
-        if spins != 0 {
-            for rot in ROT {
-                spinmap[rot as usize][x] = spins;
-                if cm[rot as usize][x] != !0 {
-                    fullspinmap[rot as usize][x] = spins & c[rot as usize] & c[rot.rotate_right() as usize];
-                    spinmap[rot as usize][x] |= cm[rot as usize][x] & (
-                        !cm[rot as usize].cols.get(x - 1).copied().unwrap_or(!0)
-                        & !cm[rot as usize].cols.get(x + 1).copied().unwrap_or(!0)
-                        & (!cm[rot as usize][x] << 1 | 1)
-                        & !cm[rot as usize][x] >> 1
-                    );
-                }
-                check_spin |= (spins & !cm[rot as usize][x] & (cm[rot as usize][x] << 1 | 1)) != 0;
+        for rot in ROT {
+            spinmap[rot as usize][x] = spins;
+            if cm[rot as usize][x] != !0 {
+                fullspinmap[rot as usize][x] = spins & c[rot as usize] & c[rot.rotate_cw() as usize];
+                immobile_spinmap[x] = !cm[rot as usize][x] & (
+                    cm[rot as usize].cols.get(x - 1).copied().unwrap_or(!0)
+                    & cm[rot as usize].cols.get(x + 1).copied().unwrap_or(!0)
+                    & (cm[rot as usize][x] << 1 | 1)
+                    & cm[rot as usize][x] >> 1
+                );
             }
         }
-    }
-
-    if !check_spin {
-        return movegen_piece_nospin(board, cm, Piece::T, force);
     }
 
     let mut searched = cm.clone().map(|x| x.as_board());
@@ -298,19 +292,17 @@ fn movegen_piece_t(board: &Board, cm: [CollisionMap; 4], force: bool) -> ArrayVe
     let mut spinloc: [[Board; 4]; 3] = std::array::from_fn(|_| std::array::from_fn(|_| Board::new()));
     let mut remaining: u64 = 0;
 
-    let mut moves: ArrayVec<PieceLocation, 128> = ArrayVec::new();
-
     if board.max_height() > SPAWN_ROW - 3 {
         let spawn = if force {
             let s = !cm[Rotation::North as usize][SPAWN_COL] & (!0 << SPAWN_ROW);
             s & s.wrapping_neg() // gets lowest bit. cursed overflow technique imo
-        } else { !cm[Rotation::North as usize][SPAWN_COL] & bb!(SPAWN_ROW) };
+        } else { !cm[Rotation::North as usize][SPAWN_COL] & bb(SPAWN_ROW) };
         
-        if spawn != 0 {
-            return moves;
+        if spawn == 0 {
+            return;
         }
 
-        let spawn_bit = xrot_idx!(SPAWN_COL, Rotation::North);
+        let spawn_bit = xrot_idx(SPAWN_COL as i8, Rotation::North as i8);
         remaining |= spawn_bit;
         to_search[Rotation::North as usize][SPAWN_COL] |= spawn;
         spinloc[Spin::None as usize][Rotation::North as usize][SPAWN_COL] |= spawn;
@@ -322,11 +314,11 @@ fn movegen_piece_t(board: &Board, cm: [CollisionMap; 4], force: bool) -> ArrayVe
                     continue;
                 }
                 let y = 64 - col.leading_zeros();
-                let surface = bb_low!(SPAWN_ROW) & !bb_low!(y);
+                let surface = bb_low(SPAWN_ROW) & !bb_low(y as i8);
 
                 to_search[rot as usize][x] = surface;
                 searched[rot as usize][x] |= surface;
-                remaining |= xrot_idx!(x, rot as usize);
+                remaining |= xrot_idx(x as i8, rot as i8);
 
                 spinloc[Spin::None as usize][rot as usize][x] |= surface;
             }
@@ -338,12 +330,13 @@ fn movegen_piece_t(board: &Board, cm: [CollisionMap; 4], force: bool) -> ArrayVe
         let x = idx >> 2;
         let rot = idx & 3;
 
-        // non-inf sdf softdrops
-        let mut m = (to_search[rot][x] >> 1) & !cm[rot][x];
-        while (m & to_search[rot][x]) != m {
-            to_search[rot][x] |= m;
-            m |= (m >> 1) & !cm[rot][x];
+        let mut m = to_search[rot][x];
+        let mut s = 0;
+        while m != s {
+            s = m;
+            m |= (m >> 1) & !searched[rot][x];
         }
+        to_search[rot][x] = m & ((cm[rot][x] << 1) | 1);
         spinloc[Spin::None as usize][rot][x] |= m;
 
         moveset[rot][x] |= to_search[rot][x] & ((cm[rot][x] << 1) | 1);
@@ -353,7 +346,7 @@ fn movegen_piece_t(board: &Board, cm: [CollisionMap; 4], force: bool) -> ArrayVe
             let m = to_search[rot][x] & !searched[rot][x - 1];
             if m != 0 {
                 to_search[rot][x - 1] |= m;
-                remaining |= xrot_idx!(x - 1, rot);
+                remaining |= xrot_idx(x as i8 - 1, rot as i8);
                 spinloc[Spin::None as usize][rot][x - 1] |= m;
             }
         }
@@ -361,13 +354,13 @@ fn movegen_piece_t(board: &Board, cm: [CollisionMap; 4], force: bool) -> ArrayVe
             let m = to_search[rot][x] & !searched[rot][x + 1];
             if m != 0 {
                 to_search[rot][x + 1] |= m;
-                remaining |= xrot_idx!(x + 1, rot);
+                remaining |= xrot_idx(x as i8 + 1, rot as i8);
                 spinloc[Spin::None as usize][rot][x + 1] |= m;
             }
         }
 
-        let mut current = to_search[rot][x];
         for to in [(rot + 1) & 3, rot.wrapping_sub(1) & 3] {
+            let mut current = to_search[rot][x];
             let from: Rotation = unsafe { std::mem::transmute(rot as u8) };
             let to: Rotation = unsafe { std::mem::transmute(to as u8) };
             let kcks = kicks(Piece::T, from, to);
@@ -382,22 +375,22 @@ fn movegen_piece_t(board: &Board, cm: [CollisionMap; 4], force: bool) -> ArrayVe
                 current ^= (m << 3) >> (ky + 3);
 
                 let spins = m & spinmap[to as usize][nx as usize];
-                spinloc[Spin::None as usize][to as usize][nx as usize] |= m ^ spins;
+                let immobile_spins = m & immobile_spinmap[nx as usize];
+                spinloc[Spin::None as usize][to as usize][nx as usize] |= m ^ (spins | immobile_spins);
 
-                if spins > 0 {
-                    if i >= 4 {
-                        spinloc[Spin::Full as usize][to as usize][nx as usize] |= spins;
-                    } else {
-                        let fullspins = fullspinmap[to as usize][nx as usize];
-                        spinloc[Spin::Mini as usize][to as usize][nx as usize] |= spins & !fullspins;
-                        spinloc[Spin::Full as usize][to as usize][nx as usize] |= spins & fullspins;
-                    }
+                if i >= 4 {
+                    spinloc[Spin::Full as usize][to as usize][nx as usize] |= spins;
+                    spinloc[Spin::Mini as usize][to as usize][nx as usize] |= immobile_spins;
+                } else {
+                    let fullspins = fullspinmap[to as usize][nx as usize];
+                    spinloc[Spin::Mini as usize][to as usize][nx as usize] |= spins & !fullspins;
+                    spinloc[Spin::Full as usize][to as usize][nx as usize] |= spins & fullspins;
                 }
 
                 m &= !searched[to as usize][nx as usize];
                 if m != 0 {
                     to_search[to as usize][nx as usize] |= m;
-                    remaining |= xrot_idx!(nx as usize, to);
+                    remaining |= xrot_idx(nx as i8, to as i8);
                 }
             }
         }
@@ -417,28 +410,28 @@ fn movegen_piece_t(board: &Board, cm: [CollisionMap; 4], force: bool) -> ArrayVe
             current ^= (m << 3) >> (ky + 3);
 
             let spins = m & spinmap[to as usize][nx as usize];
-            spinloc[Spin::None as usize][to as usize][nx as usize] |= m ^ spins;
+            let immobile_spins = m & immobile_spinmap[nx as usize];
+            spinloc[Spin::None as usize][to as usize][nx as usize] |= m ^ (spins | immobile_spins);
 
-            if spins > 0 {
-                if i >= 4 {
-                    spinloc[Spin::Full as usize][to as usize][nx as usize] |= spins;
-                } else {
-                    let fullspins = fullspinmap[to as usize][nx as usize];
-                    spinloc[Spin::Mini as usize][to as usize][nx as usize] |= spins & !fullspins;
-                    spinloc[Spin::Full as usize][to as usize][nx as usize] |= spins & fullspins;
-                }
+            if i >= 4 {
+                spinloc[Spin::Full as usize][to as usize][nx as usize] |= spins;
+                spinloc[Spin::Mini as usize][to as usize][nx as usize] |= immobile_spins;
+            } else {
+                let fullspins = fullspinmap[to as usize][nx as usize];
+                spinloc[Spin::Mini as usize][to as usize][nx as usize] |= spins & !fullspins;
+                spinloc[Spin::Full as usize][to as usize][nx as usize] |= spins & fullspins;
             }
 
             m &= !searched[to as usize][nx as usize];
             if m != 0 {
                 to_search[to as usize][nx as usize] |= m;
-                remaining |= xrot_idx!(nx as usize, to);
+                remaining |= xrot_idx(nx as i8, to as i8);
             }
         }
 
         searched[rot][x] |= to_search[rot][x];
         to_search[rot][x] = 0;
-        remaining ^= bb!(idx);
+        remaining ^= bb(idx as i8);
     }
 
     for x in 0..10 {
@@ -450,17 +443,15 @@ fn movegen_piece_t(board: &Board, cm: [CollisionMap; 4], force: bool) -> ArrayVe
             for s in [Spin::None, Spin::Mini, Spin::Full] {
                 let mut current = moveset[rot as usize][x as usize] & spinloc[s as usize][rot as usize][x as usize];
                 while current > 0 {
-                    moves.push(PieceLocation { piece: Piece::T, x, y: current.trailing_zeros() as i8, rotation: rot, spin: s });
+                    arena.push(PieceLocation { piece: Piece::T, x, y: current.trailing_zeros() as i8, rotation: rot, spin: s });
                     current &= current - 1;
                 }
             }
         }
     }
-
-    moves
 }
 
-fn movegen_piece_o(board: &Board, force: bool) -> ArrayVec<PieceLocation, 128> {
+fn movegen_piece_o(arena: &mut Vec<PieceLocation>, board: &Board, force: bool) {
     let cm = CollisionMap::new(board, Piece::O, Rotation::North);
     
     // this part will only represent 10 bits now since rotation isn't needed, so a u16 is sufficient.
@@ -470,16 +461,14 @@ fn movegen_piece_o(board: &Board, force: bool) -> ArrayVec<PieceLocation, 128> {
 
     let mut max_moves = 0;
 
-    let mut moves: ArrayVec<PieceLocation, 128> = ArrayVec::new();
-
     if board.max_height() > SPAWN_ROW - 3 {
         let spawn = if force {
             let s = !cm[SPAWN_COL] & (!0 << SPAWN_ROW);
             s & s.wrapping_neg() // gets lowest bit. cursed overflow technique imo
-        } else { !cm[SPAWN_COL] & bb!(SPAWN_ROW) };
+        } else { !cm[SPAWN_COL] & bb(SPAWN_ROW) };
         
         if spawn != 0 {
-            return moves;
+            return;
         }
 
         let spawn_bit = 1 << SPAWN_COL;
@@ -492,40 +481,41 @@ fn movegen_piece_o(board: &Board, force: bool) -> ArrayVec<PieceLocation, 128> {
                 continue;
             }
             let y = 64 - col.leading_zeros();
-            let surface = bb_low!(SPAWN_ROW) & !bb_low!(y);
+            let surface = bb_low(SPAWN_ROW) & !bb_low(y as i8);
 
             to_search[x] = surface;
             searched[x] |= surface;
             remaining |= 1 << x;
 
-            moves.push(PieceLocation { piece: Piece::O, x: x as i8, y: y as i8, rotation: Rotation::North, spin: Spin::None });
+            arena.push(PieceLocation { piece: Piece::O, x: x as i8, y: y as i8, rotation: Rotation::North, spin: Spin::None });
             max_moves += (!col & ((col << 1) | 1)).count_ones() - 1;
         }
         if max_moves == 0 {
-            return moves;
+            return;
         }
     }
 
     while remaining != 0 {
         let x = remaining.trailing_zeros() as usize;
 
-        // non-inf sdf softdrops
-        let mut m = (to_search[x] >> 1) & !to_search[x] & !searched[x];
-        while (m & to_search[x]) != m {
-            to_search[x] |= m;
-            m = (m >> 1) & !searched[x];
+        let mut m = to_search[x];
+        let mut s = 0;
+        while m != s {
+            s = m;
+            m |= (m >> 1) & !searched[x];
         }
+        to_search[x] = m & ((cm[x] << 1) | 1);
 
         // harddrops
         let mut m = to_search[x] & ((cm[x] << 1) | 1) & !searched[x];
         if m > 0 {
             max_moves -= m.count_ones();
             while m > 0 {
-                moves.push(PieceLocation { piece: Piece::O, x: x as i8, y: m.trailing_zeros() as i8, rotation: Rotation::North, spin: Spin::None });
+                arena.push(PieceLocation { piece: Piece::O, x: x as i8, y: m.trailing_zeros() as i8, rotation: Rotation::North, spin: Spin::None });
                 m &= m - 1;
             }
             if max_moves == 0 {
-                return moves;
+                return;
             }
         }
 
@@ -549,11 +539,9 @@ fn movegen_piece_o(board: &Board, force: bool) -> ArrayVec<PieceLocation, 128> {
         to_search[x] = 0;
         remaining ^= 1 << x;
     }
-
-    moves
 }
 
-const fn kicks(piece: Piece, from: Rotation, to: Rotation) -> [(i8, i8); 5] {
+pub const fn kicks(piece: Piece, from: Rotation, to: Rotation) -> [(i8, i8); 5] {
     match piece {
         Piece::O => [(0, 0); 5], // just be careful not to rotate the O piece at all lol
         Piece::I => match (from, to) {
@@ -581,7 +569,7 @@ const fn kicks(piece: Piece, from: Rotation, to: Rotation) -> [(i8, i8); 5] {
     }
 }
 
-const fn kicks_180(piece: Piece, from: Rotation, to: Rotation) -> [(i8, i8); 6] {
+pub const fn kicks_180(piece: Piece, from: Rotation, to: Rotation) -> [(i8, i8); 6] {
     match piece {
         Piece::O => [(0, 0); 6], // just be careful not to rotate the O piece at all lol
         Piece::I => match (from, to) {

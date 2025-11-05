@@ -1,3 +1,7 @@
 [workspace]
 resolver = "3"
 members = ["bitboard/bitboard_derive", "bitboard/bitboard_traits", "tetrizz"]
+
+[profile.perf]
+inherits = "release"
+debuginfo = "full"
