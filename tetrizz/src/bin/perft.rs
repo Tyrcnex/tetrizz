@@ -1,5 +1,8 @@
-use tetrizz::utils::{data::{Piece, PieceLocation, Board}, game::Game};
-use tetrizz::movegen::{movegen_piece};
+use utils::{
+    data::{Piece, PieceLocation},
+    game::Game,
+    movegen::movegen_piece
+};
 
 fn perft(arena: &mut Vec<PieceLocation>, game: &Game, queue: &[Piece; 7], idx: usize, depth: usize) -> usize {
     // if depth > 2 { arena.clear(); }

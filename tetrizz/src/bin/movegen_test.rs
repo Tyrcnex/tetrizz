@@ -1,5 +1,5 @@
-use tetrizz::{
-    utils::data::{Board, Piece, PieceLocation},
+use utils::{
+    data::{Board, Piece, PieceLocation},
     movegen::movegen_piece
 };
 

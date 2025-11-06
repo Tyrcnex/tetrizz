@@ -1,7 +1,7 @@
 use bitboard_derive::Bitboard;
 use bitboard_traits::BitboardTrait;
 
-use crate::utils::data::{Piece, Rotation, Spin, Board, PieceLocation, LUT, ROT};
+use crate::data::{Piece, Rotation, Spin, Board, PieceLocation, LUT, ROT};
 
 pub const SPAWN_ROW: i8 = 21;
 pub const SPAWN_COL: usize = 4;
@@ -182,7 +182,7 @@ fn movegen_piece_nospin(arena: &mut Vec<PieceLocation>, board: &Board, cm: [Coll
                 moveset[canonical_rot][canonical_x] |= m;
                 max_moves -= m.count_ones();
                 while m != 0 {
-                    arena.push(PieceLocation { piece, x: canonical_x as i8, y: m.trailing_zeros() as i8, rotation: unsafe { std::mem::transmute(canonical_rot as u8) }, spin: if fullspinmap[canonical_rot][canonical_x] & (m & m.wrapping_neg()) == 0 { Spin::None } else { Spin::Full }});
+                    arena.push(PieceLocation { piece, x: canonical_x as i8, y: m.trailing_zeros() as i8, rotation: unsafe { std::mem::transmute(canonical_rot as u8) }, spin: if fullspinmap[canonical_rot][canonical_x] & (m & m.wrapping_neg()) == 0 { Spin::None } else { Spin::Mini }});
                     m &= m - 1;
                 }
                 if max_moves == 0 {

@@ -1,4 +1,4 @@
-use crate::utils::{game::{Game, PlacementInfo}, data::Spin};
+use utils::{game::{Game, PlacementInfo}, data::Spin};
 use rand::Rng;
 
 pub trait Eval {

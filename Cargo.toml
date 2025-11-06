@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["bitboard/bitboard_derive", "bitboard/bitboard_traits", "tetrizz"]
+members = ["bitboard/bitboard_derive", "bitboard/bitboard_traits", "utils", "tetrizz"]
 
 [profile.perf]
 inherits = "release"

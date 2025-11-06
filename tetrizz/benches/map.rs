@@ -1,7 +1,7 @@
 use std::hint::black_box;
 use criterion::{criterion_group, criterion_main, Criterion};
-use tetrizz::{
-    utils::data::{Board, Piece, Rotation},
+use utils::{
+    data::{Board, Piece, Rotation},
     movegen::CollisionMap
 };
 

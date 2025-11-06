@@ -1,8 +1,8 @@
+use  utils::{
+    data::{Board, Piece},
+    game::Game
+};
 use tetrizz::{
-    utils::{
-        data::{Board, Piece},
-        game::Game
-    },
     search::search,
     eval::base::MinimalEval
 };

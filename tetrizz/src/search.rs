@@ -1,11 +1,12 @@
 use std::collections::BinaryHeap;
 
-use crate::utils::{
+use utils::{
     game::Game,
-    data::{Piece, PieceLocation}
+    data::{Piece, PieceLocation},
+    movegen::movegen
 };
 use crate::eval::base::Eval;
-use crate::movegen::movegen;
+
 
 #[derive(Clone, Debug)]
 pub struct Node {

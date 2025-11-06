@@ -1,9 +1,9 @@
+use utils::{
+    data::{Piece, PieceLocation},
+    game::Game,
+    queue::extend_queue
+};
 use tetrizz::{
-    utils::{
-        data::{Piece, PieceLocation},
-        game::Game,
-        queue::extend_queue
-    },
     search::search,
     eval::base::{Eval, MinimalEval}
 };

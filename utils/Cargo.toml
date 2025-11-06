@@ -1,19 +1,11 @@
 [package]
-name = "tetrizz"
+name = "utils"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-arrayvec = "0.7.6"
 bitboard_derive = { path = "../bitboard/bitboard_derive" }
 bitboard_traits = { path = "../bitboard/bitboard_traits" }
-criterion = "0.7.0"
 rand = "0.9.2"
-rayon = "1.11.0"
-utils = { path = "../utils" }
 serde = "1.0.228"
 serde_json = "1.0.145"
-
-[[bench]]
-name = "map"
-harness = false

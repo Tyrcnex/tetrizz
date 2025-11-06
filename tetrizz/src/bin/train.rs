@@ -1,18 +1,17 @@
 use rand::seq::SliceRandom;
 
 use rand::Rng;
-use rand::prelude::IteratorRandom;
 use rayon::prelude::*;
 
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::io::Write;
 
+use utils::{
+    data::{Piece, PieceLocation},
+    game::{Game, PlacementInfo},
+    queue::extend_queue
+};
 use tetrizz::{
-    utils::{
-        data::{Piece, PieceLocation},
-        game::{Game, PlacementInfo},
-        queue::extend_queue
-    },
     search::search,
     eval::base::{Eval, MinimalEval}
 };
