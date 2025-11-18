@@ -553,7 +553,7 @@ pub const fn kicks(piece: Piece, from: Rotation, to: Rotation) -> [(i8, i8); 5] 
             (Rotation::West, Rotation::South) => [(1, 0),(2, 0),(-1, 0),(2, 2),(-1, -1)],
             (Rotation::North, Rotation::East) => [(1, 0),(2, 0),(-1, 0),(-1, -1),(2, 2)],
             (Rotation::North, Rotation::West) => [(0, -1),(-1, -1),(2, -1),(2, -2),(-1, 1)],
-            _ => panic!() // this should never happen lol
+            _ => [(0, 0); 5] // this should never happen lol
         },
         _ => match (from, to) {
             (Rotation::East, Rotation::North) => [(0, 0),(1, 0),(1, -1),(0, 2),(1, 2)],
@@ -564,7 +564,7 @@ pub const fn kicks(piece: Piece, from: Rotation, to: Rotation) -> [(i8, i8); 5] 
             (Rotation::West, Rotation::South) => [(0, 0),(-1, 0),(-1, -1),(0, 2),(-1, 2)],
             (Rotation::North, Rotation::East) => [(0, 0),(-1, 0),(-1, 1),(0, -2),(-1, -2)],
             (Rotation::North, Rotation::West) => [(0, 0),(1, 0),(1, 1),(0, -2),(1, -2)],
-            _ => panic!() // this should never happen lol
+            _ => [(0, 0); 5] // this should never happen lol
         }
     }
 }
@@ -577,14 +577,14 @@ pub const fn kicks_180(piece: Piece, from: Rotation, to: Rotation) -> [(i8, i8);
             (Rotation::South, Rotation::North) => [(-1, 1),(-1, 0),(-1, 1),(-1, 1),(-1, 1),(-1, 1)],
             (Rotation::West, Rotation::East) => [(1, 1),(0, 1),(1, 1),(1, 1),(1, 1),(1, 1)],
             (Rotation::North, Rotation::South) => [(1, -1),(1, 0),(1, -1),(1, -1),(1, -1),(1, -1)],
-            _ => panic!() // this should never happen lol
+            _ => [(0, 0); 6] // this should never happen lol
         },
         _ => match (from, to) {
             (Rotation::East, Rotation::West) => [(0, 0),(1, 0),(1, 2),(1, 1),(0, 2),(0, 1)],
             (Rotation::South, Rotation::North) => [(0, 0),(0, -1),(-1, -1),(1, -1),(-1, 0),(1, 0)],
             (Rotation::West, Rotation::East) => [(0, 0),(-1, 0),(-1, 2),(-1, 1),(0, 2),(0, 1)],
             (Rotation::North, Rotation::South) => [(0, 0),(0, 1),(1, 1),(-1, 1),(1, 0),(-1, 0)],
-            _ => panic!() // this should never happen lol
+            _ => [(0, 0); 6] // this should never happen lol
         }
     }
 }

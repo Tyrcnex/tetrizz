@@ -144,11 +144,15 @@ impl Game {
                 String::new()
             };
             let stat_str = match y {
-                7 => format!("b2b: {}\x1b[0m", self.b2b),
+                7 => format!("b2b: {}", self.b2b),
                 8 => format!("combo: {}", self.combo),
                 _ => stat_str
             };
-            vstr.push_str(&format!("{stat_str:>15}  "));
+            let formatting = match y {
+                7 => if self.b2b >= 3 { "\x1b[1;32m" } else { "" },
+                _ => ""
+            };
+            vstr.push_str(&format!("{formatting}{stat_str:>15}\x1b[0m  "));
             vstr.push_str(if (y as u16) < self.incoming_garbage { "\x1b[31m▌\x1b[0m" } else { "\x1b[30m▌\x1b[0m" });
             for x in 0..10 {
                 let mut c = if (self.board.cols[x as usize] & (1 << y)) > 0 { "🟩" } else { "⬜️" };

@@ -11,7 +11,7 @@ use tetrizz::{
 };
 use serde::{Serialize, Deserialize};
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Copy, Clone, Serialize, PartialEq, Eq)]
 pub enum MovementAction {
     Spawn,
     TapLeft,
@@ -161,7 +161,7 @@ pub fn keygen(board: &Board, loc: &PieceLocation, human: bool) -> Option<Vec<Mov
                         MovementAction::TapRight => MovementAction::move_right(&cm, l, 1),
                         MovementAction::DASLeft => MovementAction::move_left(&cm, l, l.x),
                         MovementAction::DASRight => MovementAction::move_right(&cm, l, 9 - l.x),
-                        MovementAction::Softdrop => MovementAction::drop_down(&cm, l),
+                        MovementAction::Softdrop | MovementAction::Harddrop => MovementAction::drop_down(&cm, l),
                         MovementAction::RotateCW => MovementAction::rotate(&cm, &fullspinmap, &spinmap, &immobile_spinmap, l, l.rotation.rotate_cw()),
                         MovementAction::RotateCCW => MovementAction::rotate(&cm, &fullspinmap, &spinmap, &immobile_spinmap, l, l.rotation.rotate_ccw()),
                         MovementAction::Rotate180 => MovementAction::rotate_180(&cm, &fullspinmap, &spinmap, &immobile_spinmap, l),
@@ -171,13 +171,16 @@ pub fn keygen(board: &Board, loc: &PieceLocation, human: bool) -> Option<Vec<Mov
                     action
                 };
                 let searched = &mut searched_nodes[new_node.loc.spin as usize][new_node.loc.rotation as usize][new_node.loc.x as usize];
-                if new_node.loc.x == loc.x && new_node.loc.y == loc.y && new_node.loc.rotation == loc.rotation && (loc.piece != Piece::T || new_node.loc.spin == loc.spin) { // removed the spin check for now
-                    found_node = Some(new_node);
+                if action == MovementAction::Harddrop {
+                    if new_node.loc.x == loc.x && new_node.loc.y == loc.y && new_node.loc.rotation == loc.rotation && (loc.piece != Piece::T || new_node.loc.spin == loc.spin) { // removed the spin check for now
+                        found_node = Some(new_node);
+                    }
                 } else if *searched & bb(new_node.loc.y) == 0 {
                     *searched |= bb(new_node.loc.y);
                     new_search.push(new_node);
                 }
             };
+            push_loc(&node.loc, MovementAction::Harddrop);
             if human {
                 push_loc(&node.loc, MovementAction::DASLeft);
                 push_loc(&node.loc, MovementAction::DASRight);
@@ -227,7 +230,7 @@ fn main() {
 
         let parsed: InObj = serde_json::from_str(&input).unwrap();
 
-        let eval = MinimalEval { values: [-333.5903388433292, -257.50971325030974, -51.15233297009883, -306.7533752401169, -185.4127319664896, -107.0342999530273, -369.0213829655287, 96.63015564572557, -476.6250155906852, -58.72828521759004, 1068.12123537880416, -1016.9857268318688, -457.5993254187147, 2280.85733274743393] };
+        let eval = MinimalEval { values: [-333.5903388433292, -257.50971325030974, -51.15233297009883, -306.7533752401169, -185.4127319664896, -107.0342999530273, -369.0213829655287, 96.63015564572557, -476.6250155906852, -58.72828521759004, 1068.12123537880416, -1016.9857268318688, -457.5993254187147, 2280.85733274743393, 0.0] };
 
         let found_move = search(
             &parsed.game,
@@ -247,8 +250,6 @@ fn main() {
         if found_move.piece != parsed.queue[0] {
             keys.insert(0, MovementAction::Hold);
         }
-
-        keys.push(MovementAction::Harddrop);
 
         println!("{}\n", serde_json::to_string(&keys).unwrap());
     }

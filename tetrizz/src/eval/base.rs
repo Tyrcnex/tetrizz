@@ -7,18 +7,18 @@ pub trait Eval {
 
 #[derive(Debug, Clone)]
 pub struct MinimalEval {
-    pub values: [f64; 14]
+    pub values: [f64; 15]
 }
 
 impl MinimalEval {
     pub fn normalize(&mut self) {
-        let mag = self.values.iter().fold(0.0, |a,b| a + b * b).sqrt() / 1000.0;
+        let mag = self.values.iter().fold(0.0, |a,b| a + b * b).sqrt();
         self.values = self.values.map(|x| x / mag);
     }
 
     pub fn new_random() -> Self {
         let mut rng = rand::rng();
-        let mut s = Self { values: [0; 14].map(|_| rng.random_range(-10.0..=10.0)) };
+        let mut s = Self { values: std::array::from_fn(|_| rng.random_range(-1.0..=1.0)) };
         s.normalize();
         s
     }
@@ -108,5 +108,6 @@ impl Eval for MinimalEval {
         + self.values[11] * b2b_break as u8 as f64
         + self.values[12] * outgoing_attack as f64
         + self.values[13] * (game.b2b as f64 + 1.0).ln_1p()
+        + self.values[14] * game.combo as f64
     }
 }
