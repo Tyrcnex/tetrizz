@@ -66,11 +66,17 @@ const logFuncs = { logWrite, logPrint };
 
     client.on("social.invite", async data => {
         // maintenance
-        if (data.sender == process.env.OWNER_ID) {
-            // client.social.dm(data.sender, "hi owner");
-        } else {
-            client.social.dm(data.sender, "sorry! im under maintenance rn, pls try again later :3");
-            return;
+        // if (data.sender == process.env.OWNER_ID) {
+        //     // client.social.dm(data.sender, "hi owner");
+        // } else {
+        //     // client.social.dm(data.sender, "sorry! im under maintenance rn, pls try again later :3");
+        //     return;
+        // }
+
+        // testing
+        if (data.sender != process.env.OWNER_ID) return;
+        else {
+            client.social.dm(data.sender, "hi owner");
         }
 
         if (allGames.length > 6) {
@@ -251,14 +257,14 @@ process.on("uncaughtException", err => {
 });
 
 process.on("SIGINT", async _ => {
+    setTimeout(process.exit, 5000);
+    
     (async function() {
         for await (const game of allGames) {
             game.client.room.chat(`dev turned off bot, goodbye!`);
             await game.client.destroy();
         }
     })().finally(_ => process.exit(0));
-
-    setTimeout(process.exit, 5000)
 })
 
 function filterGameData(data) {

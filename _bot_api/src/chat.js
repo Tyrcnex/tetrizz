@@ -44,7 +44,7 @@ const defaultCommands = {
                     bot: "Input outside specified operating parameters. Unable to calculate any slower pace.",
                     chadhary: "too slow bro im not f rank",
                 });
-            else if (pps > 10)
+            else if (pps > 50)
                 room.msg({
                     default: "PPS is too high. (Bot operates at maximum 10 PPS)",
                     cute: "a-aren't we taking this too fast!? be nice t-to me... i'm not ready yet ><",

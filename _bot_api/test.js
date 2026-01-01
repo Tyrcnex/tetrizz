@@ -9,8 +9,8 @@ app.use(express.json());
 app.use(cors());
 
 app.post('/', (req, res) => {
-    const data = req.body; // Already parsed by express.json()
-    requestMove(data.board, data.hold, data.queue).then(x => res.send(x));
+    const data = req.body;
+    requestMove(data.board, data.hold, data.queue, data.settings).then(x => res.send(x));
 })
 
 app.listen(port, () => {
@@ -26,13 +26,7 @@ const botEngine = {
 };
 
 botEngine.engine.stdout.on("data", data => {
-    data = JSON.parse(data.toString().trim());
-    botEngine.keyInfo.allKeys = [];
-    for (const key of data) {
-        botEngine.keyInfo.allKeys.push({ type: "keydown", key, sleep: key == "DASLeft" || key == "DASRight" ? 0.7 : key == "Softdrop" ? 1 : 0.2 });
-        botEngine.keyInfo.allKeys.push({ type: "keyup", key, sleep: 0.2 });
-    }
-    botEngine.keyInfo.length = data.keys.length;
+    botEngine.keyInfo.allKeys = JSON.parse(data.toString().trim());
     // botEngine.keyInfo.desiredLocation = {
     //     piece: data.desired_location.piece,
     //     x: data.desired_location.x,
@@ -46,7 +40,7 @@ botEngine.engine.stderr.on("data", data => {
     botEngine.keyInfo.error = data.toString();
 });
 
-async function requestMove(board, hold, queue) {
+async function requestMove(board, hold, queue, settings) {
     botEngine.keyInfo = {};
 
     let board_new = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
@@ -62,14 +56,15 @@ async function requestMove(board, hold, queue) {
         game: {
             board: { cols: board_new },
             hold,
-            b2b: 67,
-            combo: 0,
+            b2b: 7,
+            combo: -1,
             incoming_garbage: 0
         },
         queue,
-        beam_width: Math.floor(100000 / (depth * 4)),
+        beam_width: Math.floor(100000 / (depth * settings.pps)),
         beam_depth: depth,
-        human: true
+        human: settings.human || true,
+        debug: settings.debug || false
     };
 
     console.log("\n\n\n\n\n\n\n", input);
@@ -84,13 +79,28 @@ async function requestMove(board, hold, queue) {
 
 function what_the_fuck_is_this() {
 window.sleep = ms => new Promise(r => setTimeout(r, ms));
-function makeMove() {
+window.done = false;
+window.settings = { pps: 2, human: false, das: 20 };
+async function makeMove() {
+    if (window.done) { return; }
+    if (GAME_OBJECT.gameEnded) {
+        await window.sleep(100);
+        // GAME_OBJECT.keyInput2({ keyCode: 82, timestamp: performance.now(), shiftKey: false, preventDefault: _ => { }, stopPropagation: _ => { }, stopImmediatePropagation: _ => { } });
+        // await window.sleep(20);
+        return await makeMove();
+    }
     let board = structuredClone(GAME_OBJECT.matrix);
+    const BLOCKS = ["I5","V5","T5","U5","W5","X5","J5","L5","S5","Z5","TL","TJ","OZ","OS","TS","TZ","LL","JJ"];
     board.reverse();
     fetch("http://localhost:3000/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ board: board.map(r => r.map(c => +!!c)), hold: "IOTLJSZ"[GAME_OBJECT.blockInHold?.id], queue: [GAME_OBJECT.activeBlock, ...GAME_OBJECT.queue].map(p => "IOTLJSZ"[p.id]) }),
+        body: JSON.stringify({
+            board: board.map(r => r.map(c => +!!c)),
+            hold: BLOCKS[GAME_OBJECT.blockInHold?.id],
+            queue: [GAME_OBJECT.activeBlock, ...GAME_OBJECT.queue].map(p => BLOCKS[p.id]),
+            settings
+        }),
     }).then(x => x.json()).then(async x => {
         const data = {
             "Softdrop": 40,
@@ -104,13 +114,17 @@ function makeMove() {
             "Harddrop": 32,
             "Hold": 67
         };
+        let allKeys = [];
+        for (const key of x.allKeys) {
+            allKeys.push({ type: "keydown", key, sleep: key == "DASLeft" || key == "DASRight" ? settings.das * 1.1 : key == "Softdrop" ? 18 : settings.das * 0.5 });
+            allKeys.push({ type: "keyup", key, sleep: settings.das * 0.5 });
+        }
         for await (const key of x.allKeys) {
             let func = (key.type == "keydown" ? GAME_OBJECT.keyInput2 : GAME_OBJECT.keyInput3).bind(GAME_OBJECT);
             let obj = { keyCode: data[key.key], timestamp: performance.now(), shiftKey: false, preventDefault: _ => { }, stopPropagation: _ => { }, stopImmediatePropagation: _ => { } };
             func(obj);
-            await window.sleep(key.sleep * 16.67);
+            await window.sleep(key.sleep);
         }
-        await window.sleep(20);
         makeMove();
     });
 }

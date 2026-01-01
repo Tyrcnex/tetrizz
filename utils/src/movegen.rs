@@ -122,7 +122,7 @@ fn movegen_piece_nospin(arena: &mut Vec<PieceLocation>, board: &Board, cm: [Coll
                 let y = 64 - col.leading_zeros();
                 let surface = bb_low(SPAWN_ROW) & !bb_low(y as i8);
 
-                to_search[rot as usize][x] = surface;
+                to_search[rot as usize][x] = surface & ((cm[rot as usize][x] << 1) | 1);
                 searched[rot as usize][x] |= surface;
                 remaining |= xrot_idx(x as i8, rot as i8);
 
@@ -147,16 +147,16 @@ fn movegen_piece_nospin(arena: &mut Vec<PieceLocation>, board: &Board, cm: [Coll
         let x = idx >> 2;
         let rot = idx & 3;
 
-        let mut m = to_search[rot][x];
-        let mut s = 0;
-        while m != s {
-            s = m;
-            m |= (m >> 1) & !searched[rot][x];
+        let mut m = (to_search[rot][x] >> 1) & !cm[rot][x];
+        let mut s = to_search[rot][x];
+        while m & s != m {
+            s |= m;
+            m |= (m >> 1) & !cm[rot][x];
         }
-        to_search[rot][x] = m & ((cm[rot][x] << 1) | 1);
+        to_search[rot][x] |= s & ((cm[rot][x] << 1) | 1);
 
         // harddrops
-        let m = to_search[rot][x] & (cm[rot][x] << 1) & !searched[rot][x];
+        let m = to_search[rot][x] & ((cm[rot][x] << 1) | 1) & !searched[rot][x];
         if m > 0 {
             let canonical_rot = match piece {
                 Piece::J | Piece::L | Piece::T => rot,
@@ -256,7 +256,6 @@ fn movegen_piece_nospin(arena: &mut Vec<PieceLocation>, board: &Board, cm: [Coll
 fn movegen_piece_t(arena: &mut Vec<PieceLocation>, board: &Board, cm: [CollisionMap; 4], force: bool) {
     let mut fullspinmap: [Board; 4] = std::array::from_fn(|_| Board::new());
     let mut spinmap: [Board; 4] = std::array::from_fn(|_| Board::new());
-    let mut immobile_spinmap = Board::new();
 
     for x in 0..10 {
         let c = [
@@ -274,12 +273,12 @@ fn movegen_piece_t(arena: &mut Vec<PieceLocation>, board: &Board, cm: [Collision
             spinmap[rot as usize][x] = spins;
             if cm[rot as usize][x] != !0 {
                 fullspinmap[rot as usize][x] = spins & c[rot as usize] & c[rot.rotate_cw() as usize];
-                immobile_spinmap[x] = !cm[rot as usize][x] & (
-                    cm[rot as usize].cols.get(x - 1).copied().unwrap_or(!0)
-                    & cm[rot as usize].cols.get(x + 1).copied().unwrap_or(!0)
-                    & (cm[rot as usize][x] << 1 | 1)
-                    & cm[rot as usize][x] >> 1
-                );
+                // spinmap[rot as usize][x] = !cm[rot as usize][x] & (
+                //     cm[rot as usize].cols.get(x - 1).copied().unwrap_or(!0)
+                //     & cm[rot as usize].cols.get(x + 1).copied().unwrap_or(!0)
+                //     & (cm[rot as usize][x] << 1 | 1)
+                //     & cm[rot as usize][x] >> 1
+                // );
             }
         }
     }
@@ -316,7 +315,7 @@ fn movegen_piece_t(arena: &mut Vec<PieceLocation>, board: &Board, cm: [Collision
                 let y = 64 - col.leading_zeros();
                 let surface = bb_low(SPAWN_ROW) & !bb_low(y as i8);
 
-                to_search[rot as usize][x] = surface;
+                to_search[rot as usize][x] = surface & ((cm[rot as usize][x] << 1) | 1);
                 searched[rot as usize][x] |= surface;
                 remaining |= xrot_idx(x as i8, rot as i8);
 
@@ -330,13 +329,13 @@ fn movegen_piece_t(arena: &mut Vec<PieceLocation>, board: &Board, cm: [Collision
         let x = idx >> 2;
         let rot = idx & 3;
 
-        let mut m = to_search[rot][x];
-        let mut s = 0;
-        while m != s {
-            s = m;
-            m |= (m >> 1) & !searched[rot][x];
+        let mut m = (to_search[rot][x] >> 1) & !cm[rot][x];
+        let mut s = to_search[rot][x];
+        while m & s != m {
+            s |= m;
+            m |= (m >> 1) & !cm[rot][x];
         }
-        to_search[rot][x] = m & ((cm[rot][x] << 1) | 1);
+        to_search[rot][x] |= s & ((cm[rot][x] << 1) | 1);
         spinloc[Spin::None as usize][rot][x] |= m;
 
         moveset[rot][x] |= to_search[rot][x] & ((cm[rot][x] << 1) | 1);
@@ -375,12 +374,10 @@ fn movegen_piece_t(arena: &mut Vec<PieceLocation>, board: &Board, cm: [Collision
                 current ^= (m << 3) >> (ky + 3);
 
                 let spins = m & spinmap[to as usize][nx as usize];
-                let immobile_spins = m & immobile_spinmap[nx as usize];
-                spinloc[Spin::None as usize][to as usize][nx as usize] |= m ^ (spins | immobile_spins);
+                spinloc[Spin::None as usize][to as usize][nx as usize] |= m ^ spins;
 
                 if i >= 4 {
                     spinloc[Spin::Full as usize][to as usize][nx as usize] |= spins;
-                    spinloc[Spin::Mini as usize][to as usize][nx as usize] |= immobile_spins;
                 } else {
                     let fullspins = fullspinmap[to as usize][nx as usize];
                     spinloc[Spin::Mini as usize][to as usize][nx as usize] |= spins & !fullspins;
@@ -410,17 +407,11 @@ fn movegen_piece_t(arena: &mut Vec<PieceLocation>, board: &Board, cm: [Collision
             current ^= (m << 3) >> (ky + 3);
 
             let spins = m & spinmap[to as usize][nx as usize];
-            let immobile_spins = m & immobile_spinmap[nx as usize];
-            spinloc[Spin::None as usize][to as usize][nx as usize] |= m ^ (spins | immobile_spins);
+            spinloc[Spin::None as usize][to as usize][nx as usize] |= m ^ spins;
 
-            if i >= 4 {
-                spinloc[Spin::Full as usize][to as usize][nx as usize] |= spins;
-                spinloc[Spin::Mini as usize][to as usize][nx as usize] |= immobile_spins;
-            } else {
-                let fullspins = fullspinmap[to as usize][nx as usize];
-                spinloc[Spin::Mini as usize][to as usize][nx as usize] |= spins & !fullspins;
-                spinloc[Spin::Full as usize][to as usize][nx as usize] |= spins & fullspins;
-            }
+            let fullspins = fullspinmap[to as usize][nx as usize];
+            spinloc[Spin::Mini as usize][to as usize][nx as usize] |= spins & !fullspins;
+            spinloc[Spin::Full as usize][to as usize][nx as usize] |= spins & fullspins;
 
             m &= !searched[to as usize][nx as usize];
             if m != 0 {
@@ -483,7 +474,7 @@ fn movegen_piece_o(arena: &mut Vec<PieceLocation>, board: &Board, force: bool) {
             let y = 64 - col.leading_zeros();
             let surface = bb_low(SPAWN_ROW) & !bb_low(y as i8);
 
-            to_search[x] = surface;
+            to_search[x] = surface & ((cm[x] << 1) | 1);
             searched[x] |= surface;
             remaining |= 1 << x;
 
@@ -504,7 +495,7 @@ fn movegen_piece_o(arena: &mut Vec<PieceLocation>, board: &Board, force: bool) {
             s = m;
             m |= (m >> 1) & !searched[x];
         }
-        to_search[x] = m & ((cm[x] << 1) | 1);
+        to_search[x] |= m & ((cm[x] << 1) | 1);
 
         // harddrops
         let mut m = to_search[x] & ((cm[x] << 1) | 1) & !searched[x];

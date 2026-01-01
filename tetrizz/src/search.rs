@@ -2,7 +2,7 @@ use std::collections::BinaryHeap;
 
 use utils::{
     game::Game,
-    data::{Piece, PieceLocation},
+    data::{Piece, PieceLocation, Spin},
     movegen::movegen
 };
 use crate::eval::base::Eval;
@@ -48,10 +48,10 @@ pub fn search(root: &Game, queue: &Vec<Piece>, eval: &impl Eval, depth: usize, w
     for (id, loc) in arena[..].iter().enumerate() {
         let mut game = root.clone();
         let placement_info = game.advance(queue[0], loc);
-        // if !placement_info.b2b_clear && placement_info.lines_cleared > 0 {
-        //     continue;
-        // }
         search_positions.push(loc.clone());
+        if placement_info.lines_cleared > 1 || (placement_info.lines_cleared == 1 && placement_info.spin == Spin::None) {
+            continue;
+        }
         if !game.can_spawn_piece(queue[1]) {
             continue;
         }
@@ -71,9 +71,9 @@ pub fn search(root: &Game, queue: &Vec<Piece>, eval: &impl Eval, depth: usize, w
             for loc in &arena[start..] {
                 let mut game = node.game.clone();
                 let placement_info = game.advance(current_piece, &loc);
-                // if !placement_info.b2b_clear && placement_info.lines_cleared > 0 {
-                //     continue;
-                // }
+                if placement_info.lines_cleared > 1 || (placement_info.lines_cleared == 1 && placement_info.spin == Spin::None) {
+                    continue;
+                }
                 if let Some(n) = next_piece && !game.can_spawn_piece(n) {
                     continue;
                 }

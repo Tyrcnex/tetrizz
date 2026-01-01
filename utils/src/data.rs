@@ -1,6 +1,5 @@
 use bitboard_traits::BitboardTrait;
 use bitboard_derive::Bitboard;
-use rand::Rng;
 use serde::Deserialize;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Deserialize)]
@@ -153,9 +152,7 @@ impl PieceLocation {
 
 impl Board {
     #[inline(always)]
-    pub fn add_garbage(&mut self, lines: u16) {
-        let mut rng = rand::rng();
-        let garb_col = rng.random_range(0..10);
+    pub fn add_garbage(&mut self, garb_col: usize, lines: u16) {
         for x in 0..10 {
             self.cols[x] = if x == garb_col { self.cols[x] << lines } else { !(!self.cols[x] << lines) };
         }

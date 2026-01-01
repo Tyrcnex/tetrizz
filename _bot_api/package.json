@@ -10,11 +10,9 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@haelp/teto": "^3.3.4",
-    "body-parser": "^2.2.0",
-    "child_process": "^1.0.2",
+    "@haelp/teto": "^3.3.5",
     "cors": "^2.8.5",
-    "dotenv": "^17.2.1",
+    "dotenv": "^17.2.3",
     "express": "^5.1.0"
   },
   "type": "module"

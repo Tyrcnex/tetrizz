@@ -1,6 +1,7 @@
 use super::data::{Spin, Board, Rotation, Piece, PieceLocation};
 use bitboard_traits::BitboardTrait;
 use serde::Deserialize;
+use rand::Rng;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct GameConfig {
@@ -77,10 +78,11 @@ impl Game {
                 self.b2b = -1;
             }
         } else {
+            let mut rng = rand::rng();
             self.combo = -1;
 
             let lines = self.incoming_garbage.min(8);
-            self.board.add_garbage(lines);
+            self.board.add_garbage(rng.random_range(0..10), lines);
             self.incoming_garbage -= lines;
             info.lines_received = lines;
         }

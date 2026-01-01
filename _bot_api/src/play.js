@@ -51,7 +51,7 @@ export async function handlePlay(data, client, room, settings, gameData, logFunc
             let queue = [engine.falling.symbol].concat(engine.queue.value).map(x => x.toUpperCase());
             let hold = engine.held?.toUpperCase();
 
-            let depth = 15;
+            let depth = 10;
 
             let input = {
                 game: {
@@ -62,7 +62,7 @@ export async function handlePlay(data, client, room, settings, gameData, logFunc
                     incoming_garbage: engine.garbageQueue.queue.map(x => x.amount).reduce((a,b) => a+b, 0)
                 },
                 queue,
-                beam_width: Math.floor(100000 / (depth * settings.pps)),
+                beam_width: Math.floor(200000 / (depth * settings.pps)),
                 beam_depth: depth,
                 human: settings.finesse == "human"
             };

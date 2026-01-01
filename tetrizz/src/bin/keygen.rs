@@ -42,29 +42,32 @@ impl MovementAction {
     }
 
     pub fn drop_down(cm: &[CollisionMap; 4], loc: &PieceLocation) -> PieceLocation {
+        let new_y = 64 - (cm[loc.rotation as usize][loc.x as usize] & bb_low(loc.y + 1)).leading_zeros() as i8;
         PieceLocation {
             x: loc.x,
-            y: 64 - (cm[loc.rotation as usize][loc.x as usize] & bb_low(loc.y + 1)).leading_zeros() as i8,
+            y: new_y,
             piece: loc.piece,
             rotation: loc.rotation,
-            spin: Spin::None
+            spin: if loc.y == new_y { loc.spin } else { Spin::None }
         }
     }
 
-    pub fn rotate(cm: &[CollisionMap; 4], fullspinmap: &[Board; 4], spinmap: &[Board; 4], immobile_spinmap: &Board, loc: &PieceLocation, to: Rotation) -> PieceLocation {
+    pub fn rotate(cm: &[CollisionMap; 4], fullspinmap: &[Board; 4], spinmap: &[Board; 4], immobile_spinmap: &[Board; 4], loc: &PieceLocation, to: Rotation) -> PieceLocation {
         let cmr = &cm[to as usize];
         let kcks = kicks(loc.piece, loc.rotation, to);
         for i in 0..5 {
             let (kx, ky) = kcks[i];
             let (x, y) = (loc.x + kx, loc.y + ky);
             if !cmr.obstructed(x, y) {
-                let spin = if loc.piece == Piece::T && i >= 4 {
-                    if spinmap[to as usize][x as usize] & bb(y) > 0 { Spin::Full }
-                    else if immobile_spinmap[x as usize] & bb(y) > 0 { Spin::Mini }
-                    else { Spin::None }
+                let spin = if loc.piece == Piece::T {
+                    if i >= 4 { Spin::Full }
+                    else {
+                        if fullspinmap[to as usize][x as usize] & bb(y) > 0 { Spin::Full }
+                        else if spinmap[to as usize][x as usize] & bb(y) > 0 { Spin::Mini }
+                        else { Spin::None }
+                    }
                 } else {
-                    if fullspinmap[to as usize][x as usize] & bb(y) > 0 { Spin::Full }
-                    else if spinmap[to as usize][x as usize] & bb(y) > 0 { Spin::Mini }
+                    if immobile_spinmap[to as usize][x as usize] & bb(y) > 0 { Spin::Mini }
                     else { Spin::None }
                 };
                 return PieceLocation { x, y, piece: loc.piece, rotation: to, spin };
@@ -73,7 +76,7 @@ impl MovementAction {
         loc.clone()
     }
 
-    pub fn rotate_180(cm: &[CollisionMap; 4], fullspinmap: &[Board; 4], spinmap: &[Board; 4], immobile_spinmap: &Board, loc: &PieceLocation) -> PieceLocation {
+    pub fn rotate_180(cm: &[CollisionMap; 4], fullspinmap: &[Board; 4], spinmap: &[Board; 4], immobile_spinmap: &[Board; 4], loc: &PieceLocation) -> PieceLocation {
         let to = loc.rotation.rotate_180();
         let cmr = &cm[to as usize];
         let kcks = kicks_180(loc.piece, loc.rotation, to);
@@ -81,13 +84,12 @@ impl MovementAction {
             let (kx, ky) = kcks[i];
             let (x, y) = (loc.x + kx, loc.y + ky);
             if !cmr.obstructed(x, y) {
-                let spin = if loc.piece == Piece::T && i >= 4 {
-                    if spinmap[to as usize][x as usize] & bb(y) > 0 { Spin::Full }
-                    else if immobile_spinmap[x as usize] & bb(y) > 0 { Spin::Mini }
-                    else { Spin::None }
-                } else {
+                let spin = if loc.piece == Piece::T {
                     if fullspinmap[to as usize][x as usize] & bb(y) > 0 { Spin::Full }
                     else if spinmap[to as usize][x as usize] & bb(y) > 0 { Spin::Mini }
+                    else { Spin::None }
+                } else {
+                    if immobile_spinmap[to as usize][x as usize] & bb(y) > 0 { Spin::Mini }
                     else { Spin::None }
                 };
                 return PieceLocation { x, y, piece: loc.piece, rotation: to, spin };
@@ -115,7 +117,7 @@ pub fn keygen(board: &Board, loc: &PieceLocation, human: bool) -> Option<Vec<Mov
 
     let mut fullspinmap: [Board; 4] = std::array::from_fn(|_| Board::new());
     let mut spinmap: [Board; 4] = std::array::from_fn(|_| Board::new());
-    let mut immobile_spinmap = Board::new();
+    let mut immobile_spinmap: [Board; 4] = std::array::from_fn(|_| Board::new());
 
     for x in 0..10 {
         let c = [
@@ -137,7 +139,7 @@ pub fn keygen(board: &Board, loc: &PieceLocation, human: bool) -> Option<Vec<Mov
                 if loc.piece == Piece::T {
                     fullspinmap[rot as usize][x] = spins & c[rot as usize] & c[rot.rotate_cw() as usize];
                 }
-                immobile_spinmap[x] |= !cm[rot as usize][x] & (
+                immobile_spinmap[rot as usize][x] |= !cm[rot as usize][x] & (
                     cm[rot as usize].cols.get(x - 1).copied().unwrap_or(!0)
                     & cm[rot as usize].cols.get(x + 1).copied().unwrap_or(!0)
                     & (cm[rot as usize][x] << 1 | 1)
@@ -172,7 +174,7 @@ pub fn keygen(board: &Board, loc: &PieceLocation, human: bool) -> Option<Vec<Mov
                 };
                 let searched = &mut searched_nodes[new_node.loc.spin as usize][new_node.loc.rotation as usize][new_node.loc.x as usize];
                 if action == MovementAction::Harddrop {
-                    if new_node.loc.x == loc.x && new_node.loc.y == loc.y && new_node.loc.rotation == loc.rotation && (loc.piece != Piece::T || new_node.loc.spin == loc.spin) { // removed the spin check for now
+                    if new_node.loc.x == loc.x && new_node.loc.y == loc.y && new_node.loc.rotation == loc.rotation && new_node.loc.spin == loc.spin {
                         found_node = Some(new_node);
                     }
                 } else if *searched & bb(new_node.loc.y) == 0 {
